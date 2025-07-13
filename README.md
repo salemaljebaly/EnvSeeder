@@ -1,204 +1,214 @@
-# GitHub Actions Secrets Uploader
+# GitHub Secrets Uploader
 
-A simple, fully automated Bash script that bulk-uploads environment variables from a `.env` file as GitHub Actions repository secrets using the GitHub CLI.
+A powerful bash script with automated setup to bulk upload environment variables from a `.env` file to GitHub Actions secrets.
 
 ## Features
 
-- 🚀 **Fully Automated** - Zero prompts, smart auto-detection
-- 🔐 Secure handling of sensitive data with value masking in logs
-- 🔄 Automatic retry mechanism for failed uploads
-- 🌍 Support for environment-specific secrets
-- ✅ Comprehensive validation and error handling
-- 📊 Progress tracking and detailed summary reporting
-
-## Prerequisites
-
-1. **GitHub CLI (gh)** - Version 2.0 or higher
-   ```bash
-   # Install via Homebrew (macOS)
-   brew install gh
-   
-   # Install via apt (Ubuntu/Debian)
-   sudo apt install gh
-   
-   # Install via yum (RHEL/CentOS)
-   sudo yum install gh
-   ```
-
-2. **Authentication** - Must be logged in with repo scope
-   ```bash
-   gh auth login
-   # or refresh with repo scope
-   gh auth refresh -s repo
-   ```
-
-3. **POSIX shell** - Works on macOS and Linux (bash, zsh, etc.)
+- 🚀 **Automated Setup**: One-command installation of all dependencies
+- 🔄 **Automatic Detection**: Auto-detects `.env` files and git repository
+- 🛡️ **Secure**: Masks secret values in output logs
+- ✅ **Validation**: Validates secret names according to GitHub requirements
+- 🔁 **Retry Logic**: Automatically retries failed uploads
+- 🎯 **Environment Support**: Supports both repository and environment-specific secrets
+- 📊 **Progress Tracking**: Shows detailed progress and summary
+- 🔧 **Cross-Platform**: Supports macOS, Linux, and Windows
 
 ## Quick Start
 
-1. Download and run:
+### Option 1: Automated Setup (Recommended)
+
+1. **Run the setup script** (installs all dependencies automatically):
    ```bash
-   curl -O https://raw.githubusercontent.com/your-repo/gh-secrets-uploader/main/gh-secrets-upload.sh
-   chmod +x gh-secrets-upload.sh
+   ./setup.sh
+   ```
+
+2. **Upload your secrets**:
+   ```bash
    ./gh-secrets-upload.sh
    ```
 
-2. Or clone the repository:
+### Option 2: Manual Setup
+
+1. **Install GitHub CLI** (if not already installed):
    ```bash
-   git clone https://github.com/your-repo/gh-secrets-uploader.git
-   cd gh-secrets-uploader
-   ./gh-secrets-upload.sh
+   # macOS
+   brew install gh
+   
+   # Ubuntu/Debian
+   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+   sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+   sudo apt update && sudo apt install gh
+   ```
+
+2. **Authenticate with GitHub**:
+   ```bash
+   gh auth login
+   ```
+
+3. **Make script executable**:
+   ```bash
+   chmod +x gh-secrets-upload.sh
    ```
 
 ## Usage
-
-### Super Simple - Just Run It!
-
-The script automatically detects everything:
-
-```bash
-./gh-secrets-upload.sh
-```
-
-**That's it!** The script will:
-- Auto-find your .env file (tries `.env.prod`, `.env.production`, `.env.local`, `.env`)
-- Auto-detect your GitHub repository from git remote
-- Upload all secrets immediately
-
-### Manual Override (Optional)
-
-You can specify arguments if needed:
 
 ```bash
 ./gh-secrets-upload.sh [envfile] [owner/repo] [environment]
 ```
 
+### Arguments
+
+- `envfile` (optional): Path to your `.env` file. If not provided, script will auto-detect in this order:
+  - `.env.prod`
+  - `.env.production` 
+  - `.env.local`
+  - `.env`
+
+- `owner/repo` (optional): GitHub repository in format `owner/repository`. If not provided, script will auto-detect from git remote.
+
+- `environment` (optional): Target environment name for environment-specific secrets. If not provided, secrets will be set at repository level.
+
 ### Examples
 
 ```bash
-# Fully automated (recommended)
+# Basic usage - auto-detect everything
 ./gh-secrets-upload.sh
 
 # Use specific .env file
-./gh-secrets-upload.sh .env.staging
+./gh-secrets-upload.sh .env.production
 
-# Specify .env and repository
+# Specify different repository
 ./gh-secrets-upload.sh .env.prod myorg/myapp
 
-# Include environment name
-./gh-secrets-upload.sh .env.prod myorg/myapp production
+# Upload to specific environment
+./gh-secrets-upload.sh .env.prod myorg/myapp staging
 ```
+
+## Setup Script Features
+
+The `setup.sh` script provides:
+
+- **Dependency Detection**: Automatically checks for required tools
+- **Cross-Platform Installation**: Supports multiple operating systems and package managers
+- **GitHub CLI Installation**: Installs GitHub CLI using the appropriate method for your system
+- **Authentication Check**: Verifies GitHub CLI authentication status
+- **Permission Setup**: Makes scripts executable automatically
+
+### Supported Platforms
+
+- **macOS**: Uses Homebrew
+- **Linux**: 
+  - Debian/Ubuntu (apt)
+  - RHEL/CentOS/Fedora (dnf/yum)
+  - Arch Linux (pacman)
+- **Windows**: Uses winget or Chocolatey
 
 ## .env File Format
 
-The script supports standard `.env` file format:
+Your `.env` file should contain key-value pairs:
 
 ```bash
-# Comments are ignored
-API_KEY=your-secret-api-key
-DATABASE_URL="postgresql://user:pass@host:5432/db"
-DEBUG=true
-WEBHOOK_SECRET='your-webhook-secret'
+# Database configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_PASSWORD="my-secret-password"
 
-# Empty lines are ignored
+# API keys
+API_KEY=abc123def456
+STRIPE_SECRET_KEY='sk_test_...'
 
-FEATURE_FLAG=enabled
+# Comments and empty lines are ignored
+# COMMENTED_OUT_VAR=value
 ```
 
 ### Rules
 
-- Lines starting with `#` are treated as comments
-- Empty lines are ignored
-- Variable names are automatically converted to uppercase
+- Variable names will be converted to uppercase
+- Variable names must match pattern `[A-Z0-9_]+`
 - Values can be quoted with single or double quotes
-- Variable names must match pattern `[A-Z0-9_]+` (enforced by GitHub)
+- Comments (lines starting with `#`) are ignored
+- Empty lines are ignored
+- Variables starting with `GITHUB_` are automatically skipped (GitHub restriction)
 
 ## Security Features
 
-- **Value Masking**: Secret values are masked in all output (shows first 2 and last 2 characters)
-- **Memory Cleanup**: Sensitive data is cleared from memory after processing
-- **No Logging**: Secret values are never written to logs or stdout
-- **Validation**: Ensures GitHub CLI has proper authentication and permissions
-
-## Output Example
-
-```
-ℹ️  Processing .env file: .env.prod
-ℹ️  Target repository: myorg/myapp
-ℹ️  Setting repository-level secrets
-
-✅ Added API_KEY (value: ap****ey)
-✅ Added DATABASE_URL (value: po****32)
-⚠️  Retrying WEBHOOK_SECRET...
-✅ Added WEBHOOK_SECRET (value: wh****et) [retry]
-❌ Failed to add INVALID-NAME (value: so****ng)
-
-ℹ️  === SUMMARY ===
-Total secrets processed: 4
-Successfully added: 3
-Failed: 1
-```
+- **Value Masking**: Secret values are masked in output (e.g., `my****et`)
+- **No Logging**: Secret values are never written to logs or files
+- **Memory Cleanup**: Variables are unset after processing
+- **Validation**: Only valid secret names are processed
 
 ## Error Handling
 
-The script handles various error conditions:
+- **Automatic Setup**: If dependencies are missing, the main script will automatically run setup
+- **Automatic Retry**: Failed uploads are automatically retried once
+- **Detailed Errors**: Error messages include helpful debugging information
+- **Validation**: Invalid secret names are skipped with warnings
+- **Prerequisites Check**: Verifies GitHub CLI installation and authentication
 
-- **Missing GitHub CLI**: Prompts to install `gh`
-- **Authentication Issues**: Guides through `gh auth login`
-- **Invalid Repository**: Validates repository exists and is accessible
-- **File Access**: Checks if .env file exists and is readable
-- **Invalid Secret Names**: Validates against GitHub's naming requirements
-- **Upload Failures**: Retries once, then reports failure
+## Example Output
 
-## Environment-Specific Secrets
-
-GitHub Actions supports environment-specific secrets for deployment environments:
-
-```bash
-# Upload to 'production' environment
-./gh-secrets-upload.sh -f .env.prod -r myorg/myapp -e production
-
-# Upload to 'staging' environment  
-./gh-secrets-upload.sh -f .env.staging -r myorg/myapp -e staging
 ```
+ℹ️  Auto-detected .env file: .env.production
+ℹ️  Auto-detected repository: myorg/myapp
+ℹ️  Setting repository-level secrets
 
-Environment secrets take precedence over repository secrets in GitHub Actions workflows.
+✅ Added DATABASE_URL (value: po****ql)
+✅ Added API_KEY (value: ab****56)
+⚠️  Skipping GITHUB_TOKEN - secret names cannot start with 'GITHUB_' (GitHub restriction)
+✅ Added STRIPE_KEY (value: sk****_test)
+
+ℹ️  === SUMMARY ===
+Total secrets processed: 3
+Successfully added: 3
+Failed: 0
+```
 
 ## Troubleshooting
 
-### Permission Errors
-
+### "Dependencies missing"
+The script will automatically run `setup.sh` if dependencies are missing. If setup fails:
 ```bash
-# Re-authenticate with repo scope
-gh auth refresh -s repo
-
-# Check current authentication status
-gh auth status
+./setup.sh
 ```
 
-### Invalid Secret Names
+### "GitHub CLI is not authenticated"
+```bash
+gh auth login
+# Follow the prompts to authenticate
+```
 
-GitHub requires secret names to match `[A-Z0-9_]+`:
-- ✅ `API_KEY`, `DATABASE_URL`, `FEATURE_FLAG_1`
-- ❌ `api-key`, `database.url`, `feature-flag`
+### "Token may not have sufficient 'repo' scope"
+```bash
+gh auth refresh -s repo
+```
 
-### Large .env Files
+### "No .env file found"
+Ensure you have one of these files in your current directory:
+- `.env.prod`
+- `.env.production`
+- `.env.local` 
+- `.env`
 
-The script processes files line by line, so memory usage is minimal even for large files.
+Or specify the path explicitly:
+```bash
+./gh-secrets-upload.sh path/to/your/.env
+```
 
-## Contributing
+### "No git repository detected"
+Ensure you're in a git repository with a GitHub remote, or specify the repository:
+```bash
+./gh-secrets-upload.sh .env myorg/myrepo
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+## Files
+
+- `gh-secrets-upload.sh`: Main script for uploading secrets
+- `setup.sh`: Automated dependency installation script
+- `.env.example`: Example environment file
+- `README.md`: This documentation
+- `LICENSE`: MIT license file
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Support
-
-- Report issues: [GitHub Issues](https://github.com/your-repo/gh-secrets-uploader/issues)
-- Documentation: [GitHub Discussions](https://github.com/your-repo/gh-secrets-uploader/discussions)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

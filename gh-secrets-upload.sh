@@ -50,15 +50,33 @@ validate_secret_name() {
     return 0
 }
 
-# Check prerequisites
+# Check prerequisites with automated setup
 check_prerequisites() {
+    # Check if setup script exists and offer to run it
+    if [ ! -f "./setup.sh" ] && (! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1); then
+        log_warn "Dependencies not found. Consider creating a setup.sh script for automated installation."
+    elif [ -f "./setup.sh" ] && (! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1); then
+        log_info "Dependencies missing. Running setup script..."
+        if ./setup.sh; then
+            log_success "Setup completed. Continuing with secrets upload..."
+        else
+            log_error "Setup failed. Please resolve issues and try again."
+            exit 1
+        fi
+    fi
+
+    # Verify GitHub CLI is available
     if ! command -v gh >/dev/null 2>&1; then
-        log_error "GitHub CLI (gh) is not installed. Please install it first."
+        log_error "GitHub CLI (gh) is not installed."
+        log_info "Run './setup.sh' to install dependencies automatically, or install manually:"
+        log_info "Visit: https://cli.github.com/manual/installation"
         exit 1
     fi
 
+    # Verify GitHub CLI authentication
     if ! gh auth status >/dev/null 2>&1; then
-        log_error "GitHub CLI is not authenticated. Please run 'gh auth login' first."
+        log_error "GitHub CLI is not authenticated."
+        log_info "Please run: gh auth login"
         exit 1
     fi
 
@@ -94,12 +112,28 @@ find_env_file() {
 
 # Show usage
 show_usage() {
+    echo "GitHub Secrets Uploader - Automated bulk upload of secrets to GitHub Actions"
+    echo ""
     echo "Usage: $0 [envfile] [owner/repo] [environment]"
+    echo ""
+    echo "Arguments:"
+    echo "  envfile      Path to .env file (auto-detected if not provided)"
+    echo "  owner/repo   GitHub repository (auto-detected from git remote if not provided)"
+    echo "  environment  Target environment for secrets (optional)"
+    echo ""
     echo "Examples:"
     echo "  $0                          # Auto-detect .env and repo"
     echo "  $0 .env.prod                # Use specific .env file"
     echo "  $0 .env.prod myorg/myapp    # Specify .env and repo"
     echo "  $0 .env.prod myorg/myapp staging  # Include environment"
+    echo ""
+    echo "Setup:"
+    echo "  ./setup.sh                  # Install dependencies automatically"
+    echo ""
+    echo "Requirements:"
+    echo "  - GitHub CLI (gh) - installed automatically by setup.sh"
+    echo "  - Git repository with GitHub remote"
+    echo "  - GitHub authentication (gh auth login)"
     exit 0
 }
 
