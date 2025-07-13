@@ -35,9 +35,18 @@ mask_value() {
 # Validate GitHub secret name
 validate_secret_name() {
     local name="$1"
+    
+    # Check basic pattern
     if ! echo "$name" | grep -qE '^[A-Z0-9_]+$'; then
         return 1
     fi
+    
+    # Check for GitHub reserved prefixes
+    if [[ "$name" =~ ^GITHUB_ ]]; then
+        log_warn "Skipping $name - secret names cannot start with 'GITHUB_' (GitHub restriction)"
+        return 1
+    fi
+    
     return 0
 }
 
@@ -65,7 +74,7 @@ check_prerequisites() {
 # Get current git repository
 get_current_repo() {
     if git remote get-url origin >/dev/null 2>&1; then
-        git remote get-url origin | sed -E 's|.*github\.com[/:]([^/]+/[^/]+)(\.git)?.*|\1|'
+        git remote get-url origin | sed -E 's|.*github\.com[/:]([^/]+/[^/]+)\.git.*|\1|' | sed -E 's|.*github\.com[/:]([^/]+/[^/]+)$|\1|'
     else
         echo ""
     fi
@@ -109,19 +118,26 @@ set_secret() {
     fi
 
     # First attempt
-    if eval "$cmd" >/dev/null 2>&1; then
+    local output
+    if output=$(eval "$cmd" 2>&1); then
         log_success "Added $key (value: $masked_value)"
         return 0
     fi
 
+    # Show error for debugging (without revealing secret value)
+    local debug_cmd="gh secret set '$key' -b'[REDACTED]' --repo '$repo'"
+    if [ -n "$environment" ]; then
+        debug_cmd="$debug_cmd --env '$environment'"
+    fi
+    
     # Retry once
-    log_warn "Retrying $key..."
-    if eval "$cmd" >/dev/null 2>&1; then
+    log_warn "Retrying $key... (cmd: $debug_cmd)"
+    if output=$(eval "$cmd" 2>&1); then
         log_success "Added $key (value: $masked_value) [retry]"
         return 0
     fi
 
-    log_error "Failed to add $key (value: $masked_value)"
+    log_error "Failed to add $key (value: $masked_value) - Error: ${output}"
     return 1
 }
 
