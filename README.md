@@ -17,12 +17,7 @@ A powerful bash script with automated setup to bulk upload environment variables
 
 ## 🚀 Quick Start
 
-### One Command Install (New Users)
-```bash
-curl -fsSL https://raw.githubusercontent.com/salemaljebaly/EnvSeeder/feat/improve-script-automation/install.sh | bash
-```
-
-### Manual Download
+### Recommended Install (Most Reliable)
 ```bash
 # Download both scripts
 curl -O https://raw.githubusercontent.com/salemaljebaly/EnvSeeder/feat/improve-script-automation/setup.sh
@@ -31,6 +26,14 @@ curl -O https://raw.githubusercontent.com/salemaljebaly/EnvSeeder/feat/improve-s
 # Make executable and run setup
 chmod +x *.sh
 ./setup.sh
+```
+
+### Alternative: Git Clone and Copy
+```bash
+git clone https://github.com/salemaljebaly/EnvSeeder.git
+cp EnvSeeder/gh-secrets-upload.sh EnvSeeder/setup.sh .
+rm -rf EnvSeeder
+chmod +x *.sh && ./setup.sh
 ```
 
 ### If You Cloned This Repository
