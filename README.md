@@ -50,6 +50,7 @@ chmod +x *.sh && ./setup.sh
 - ✅ **Validation**: Validates secret names according to GitHub requirements
 - 🔁 **Retry Logic**: Automatically retries failed uploads
 - 🎯 **Environment Support**: Repository and environment-specific secrets
+- ⏭️ **Skip Existing Secrets**: Option to skip secrets that already exist
 - 📊 **Progress Tracking**: Detailed progress and summary reporting
 - 🔧 **Cross-Platform**: macOS, Linux, and Windows support
 
@@ -60,9 +61,19 @@ chmod +x *.sh && ./setup.sh
 ./gh-secrets-upload.sh
 ```
 
+### Skip existing secrets
+```bash
+./gh-secrets-upload.sh --skip-existing
+```
+
 ### Specific .env file
 ```bash
 ./gh-secrets-upload.sh .env.production
+```
+
+### Skip existing with specific file
+```bash
+./gh-secrets-upload.sh --skip-existing .env.production
 ```
 
 ### Different repository
@@ -94,6 +105,15 @@ echo "API_KEY=your-secret-key" > .env.prod
 ./gh-secrets-upload.sh .env.development owner/repo development
 ./gh-secrets-upload.sh .env.staging owner/repo staging  
 ./gh-secrets-upload.sh .env.production owner/repo production
+```
+
+### Incremental Updates
+```bash
+# Initial upload of all secrets
+./gh-secrets-upload.sh .env.production
+
+# Later, add new secrets without overwriting existing ones
+./gh-secrets-upload.sh --skip-existing .env.production
 ```
 
 ### Team Setup
@@ -181,6 +201,9 @@ curl -fsSL https://raw.githubusercontent.com/salemaljebaly/EnvSeeder/feat/improv
 
 # Basic upload
 ./gh-secrets-upload.sh
+
+# Skip existing secrets
+./gh-secrets-upload.sh --skip-existing
 
 # Help
 ./gh-secrets-upload.sh --help
