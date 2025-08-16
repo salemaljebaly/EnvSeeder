@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # GitHub Actions Secret Bulk Uploader - Simplified & Automated
-# Usage: ./gh-secrets-upload.sh [envfile] [owner/repo] [environment]
+# Usage: ./gh-secrets-upload.sh [--skip-existing] [envfile] [owner/repo] [environment]
 
 # Color codes for output
 RED='\033[0;31m'
@@ -15,6 +15,8 @@ NC='\033[0m' # No Color
 TOTAL_SECRETS=0
 SUCCESS_COUNT=0
 FAIL_COUNT=0
+SKIPPED_COUNT=0
+SKIP_EXISTING=false
 
 # Helper functions
 log_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
@@ -114,7 +116,10 @@ find_env_file() {
 show_usage() {
     echo "GitHub Secrets Uploader - Automated bulk upload of secrets to GitHub Actions"
     echo ""
-    echo "Usage: $0 [envfile] [owner/repo] [environment]"
+    echo "Usage: $0 [--skip-existing] [envfile] [owner/repo] [environment]"
+    echo ""
+    echo "Options:"
+    echo "  --skip-existing  Skip secrets that already exist in the repository"
     echo ""
     echo "Arguments:"
     echo "  envfile      Path to .env file (auto-detected if not provided)"
@@ -123,6 +128,7 @@ show_usage() {
     echo ""
     echo "Examples:"
     echo "  $0                          # Auto-detect .env and repo"
+    echo "  $0 --skip-existing          # Skip existing secrets"
     echo "  $0 .env.prod                # Use specific .env file"
     echo "  $0 .env.prod myorg/myapp    # Specify .env and repo"
     echo "  $0 .env.prod myorg/myapp staging  # Include environment"
@@ -137,6 +143,20 @@ show_usage() {
     exit 0
 }
 
+# Check if secret exists
+check_secret_exists() {
+    local key="$1"
+    local repo="$2"
+    local environment="$3"
+    
+    local cmd="gh secret list --repo '$repo'"
+    if [ -n "$environment" ]; then
+        cmd="$cmd --env '$environment'"
+    fi
+    
+    eval "$cmd" 2>/dev/null | grep -q "^$key"
+}
+
 # Set GitHub secret with retry
 set_secret() {
     local key="$1"
@@ -145,6 +165,12 @@ set_secret() {
     local environment="$4"
     local masked_value
     masked_value=$(mask_value "$value")
+
+    # Check if secret exists and skip if requested
+    if [ "$SKIP_EXISTING" = true ] && check_secret_exists "$key" "$repo" "$environment"; then
+        log_warn "Skipping $key (already exists)"
+        return 2  # Return 2 to indicate skipped
+    fi
 
     local cmd="gh secret set '$key' -b'$value' --repo '$repo'"
     if [ -n "$environment" ]; then
@@ -219,8 +245,14 @@ process_env_file() {
 
             ((TOTAL_SECRETS++))
             
+            local result
             if set_secret "$key" "$value" "$repo" "$environment"; then
-                ((SUCCESS_COUNT++))
+                result=$?
+                if [ $result -eq 2 ]; then
+                    ((SKIPPED_COUNT++))
+                else
+                    ((SUCCESS_COUNT++))
+                fi
             else
                 ((FAIL_COUNT++))
             fi
@@ -239,6 +271,9 @@ print_summary() {
     log_info "=== SUMMARY ==="
     echo "Total secrets processed: $TOTAL_SECRETS"
     echo "Successfully added: $SUCCESS_COUNT"
+    if [ $SKIPPED_COUNT -gt 0 ]; then
+        echo "Skipped (already exist): $SKIPPED_COUNT"
+    fi
     echo "Failed: $FAIL_COUNT"
     
     if [ $FAIL_COUNT -gt 0 ]; then
@@ -250,10 +285,21 @@ print_summary() {
 main() {
     check_prerequisites
 
-    # Handle help
-    if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-        show_usage
-    fi
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage
+                ;;
+            --skip-existing)
+                SKIP_EXISTING=true
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
 
     # Auto-detect or use provided arguments
     local env_file="${1:-}"
