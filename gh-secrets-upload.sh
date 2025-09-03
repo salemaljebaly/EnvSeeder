@@ -254,11 +254,50 @@ process_env_file() {
     echo
 
     # Read and process each line
+    local in_multiline=false
+    local multiline_key=""
+    local multiline_value=""
+    
     while IFS= read -r line || [ -n "$line" ]; do
-        # Skip empty lines and comments
-        [ -z "$line" ] && continue
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        # Skip empty lines and comments (only when not in multiline)
+        if [ "$in_multiline" = false ]; then
+            [ -z "$line" ] && continue
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        fi
+
+        # Check if we're continuing a multiline value
+        if [ "$in_multiline" = true ]; then
+            # Check if this line ends the multiline value
+            if [[ "$line" =~ ^(.*)\"[[:space:]]*$ ]]; then
+                # End of multiline value
+                multiline_value="$multiline_value${BASH_REMATCH[1]}"
+                in_multiline=false
+                
+                # Process the complete multiline value
+                ((TOTAL_SECRETS++))
+                
+                local result
+                if set_secret "$multiline_key" "$multiline_value" "$repo" "$environment"; then
+                    result=$?
+                    if [ $result -eq 2 ]; then
+                        ((SKIPPED_COUNT++))
+                    else
+                        ((SUCCESS_COUNT++))
+                    fi
+                else
+                    ((FAIL_COUNT++))
+                fi
+                
+                # Clear multiline variables
+                multiline_key=""
+                multiline_value=""
+            else
+                # Continue building multiline value
+                multiline_value="$multiline_value$line"$'\n'
+            fi
+            continue
+        fi
 
         # Parse KEY=VALUE
         if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
@@ -275,7 +314,19 @@ process_env_file() {
                 continue
             fi
 
-            # Remove surrounding quotes if present
+            # Check if value starts with quote but doesn't end with quote (multiline)
+            if [[ "$value" =~ ^\"(.*)$ ]]; then
+                local start_content="${BASH_REMATCH[1]}"
+                if [[ ! "$value" =~ ^\"(.*)\"[[:space:]]*$ ]]; then
+                    # Start of multiline value
+                    in_multiline=true
+                    multiline_key="$key"
+                    multiline_value="$start_content"$'\n'
+                    continue
+                fi
+            fi
+
+            # Remove surrounding quotes if present (single line)
             if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
                 value="${BASH_REMATCH[1]}"
             fi
@@ -294,7 +345,9 @@ process_env_file() {
                 ((FAIL_COUNT++))
             fi
         else
-            log_warn "Skipping invalid line: $line"
+            if [ "$in_multiline" = false ]; then
+                log_warn "Skipping invalid line: $line"
+            fi
         fi
     done < "$env_file"
 
@@ -304,14 +357,34 @@ process_env_file() {
         
         # Get list of local secrets from .env file
         local env_secrets=()
+        local sync_in_multiline=false
+        
         while IFS= read -r line || [ -n "$line" ]; do
-            [ -z "$line" ] && continue
-            [[ "$line" =~ ^[[:space:]]*# ]] && continue
-            [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+            # Skip empty lines and comments (only when not in multiline)
+            if [ "$sync_in_multiline" = false ]; then
+                [ -z "$line" ] && continue
+                [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+            fi
+            
+            # Check if we're continuing a multiline value
+            if [ "$sync_in_multiline" = true ]; then
+                # Check if this line ends the multiline value
+                if [[ "$line" =~ ^(.*)\"[[:space:]]*$ ]]; then
+                    sync_in_multiline=false
+                fi
+                continue
+            fi
             
             if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
                 local env_key="${BASH_REMATCH[1]}"
+                local env_value="${BASH_REMATCH[2]}"
                 env_key=$(echo "$env_key" | tr '[:lower:]' '[:upper:]')
+                
+                # Check if this starts a multiline value
+                if [[ "$env_value" =~ ^\"(.*)$ ]] && [[ ! "$env_value" =~ ^\"(.*)\"[[:space:]]*$ ]]; then
+                    sync_in_multiline=true
+                fi
                 
                 if validate_secret_name "$env_key" >/dev/null 2>&1; then
                     env_secrets+=("$env_key")
