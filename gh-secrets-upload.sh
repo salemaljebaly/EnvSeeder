@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # GitHub Actions Secret Bulk Uploader - Simplified & Automated
-# Usage: ./gh-secrets-upload.sh [--skip-existing] [envfile] [owner/repo] [environment]
+# Usage: ./gh-secrets-upload.sh [--skip-existing] [--sync] [envfile] [owner/repo] [environment]
 
 # Color codes for output
 RED='\033[0;31m'
@@ -16,7 +16,9 @@ TOTAL_SECRETS=0
 SUCCESS_COUNT=0
 FAIL_COUNT=0
 SKIPPED_COUNT=0
+DELETED_COUNT=0
 SKIP_EXISTING=false
+SYNC_MODE=false
 
 # Helper functions
 log_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
@@ -116,10 +118,11 @@ find_env_file() {
 show_usage() {
     echo "GitHub Secrets Uploader - Automated bulk upload of secrets to GitHub Actions"
     echo ""
-    echo "Usage: $0 [--skip-existing] [envfile] [owner/repo] [environment]"
+    echo "Usage: $0 [--skip-existing] [--sync] [envfile] [owner/repo] [environment]"
     echo ""
     echo "Options:"
     echo "  --skip-existing  Skip secrets that already exist in the repository"
+    echo "  --sync           Synchronize secrets (delete GitHub secrets not in .env file)"
     echo ""
     echo "Arguments:"
     echo "  envfile      Path to .env file (auto-detected if not provided)"
@@ -129,6 +132,7 @@ show_usage() {
     echo "Examples:"
     echo "  $0                          # Auto-detect .env and repo"
     echo "  $0 --skip-existing          # Skip existing secrets"
+    echo "  $0 --sync                   # Sync secrets (delete missing from .env)"
     echo "  $0 .env.prod                # Use specific .env file"
     echo "  $0 .env.prod myorg/myapp    # Specify .env and repo"
     echo "  $0 .env.prod myorg/myapp staging  # Include environment"
@@ -155,6 +159,39 @@ check_secret_exists() {
     fi
     
     eval "$cmd" 2>/dev/null | grep -q "^$key"
+}
+
+# Get existing secrets from GitHub
+get_existing_secrets() {
+    local repo="$1"
+    local environment="$2"
+    
+    local cmd="gh secret list --repo '$repo'"
+    if [ -n "$environment" ]; then
+        cmd="$cmd --env '$environment'"
+    fi
+    
+    eval "$cmd" 2>/dev/null | awk '{print $1}' | grep -v '^$' || true
+}
+
+# Delete GitHub secret
+delete_secret() {
+    local key="$1"
+    local repo="$2"
+    local environment="$3"
+    
+    local cmd="gh secret delete '$key' --repo '$repo'"
+    if [ -n "$environment" ]; then
+        cmd="$cmd --env '$environment'"
+    fi
+    
+    if eval "$cmd" 2>/dev/null; then
+        log_success "Deleted $key (no longer in .env file)"
+        return 0
+    else
+        log_error "Failed to delete $key"
+        return 1
+    fi
 }
 
 # Set GitHub secret with retry
@@ -261,8 +298,63 @@ process_env_file() {
         fi
     done < "$env_file"
 
+    # Sync mode: Delete secrets that exist in GitHub but not in .env file
+    if [ "$SYNC_MODE" = true ]; then
+        log_info "Sync mode enabled: checking for secrets to delete..."
+        
+        # Get list of local secrets from .env file
+        local env_secrets=()
+        while IFS= read -r line || [ -n "$line" ]; do
+            [ -z "$line" ] && continue
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+            
+            if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+                local env_key="${BASH_REMATCH[1]}"
+                env_key=$(echo "$env_key" | tr '[:lower:]' '[:upper:]')
+                
+                if validate_secret_name "$env_key" >/dev/null 2>&1; then
+                    env_secrets+=("$env_key")
+                fi
+            fi
+        done < "$env_file"
+        
+        # Get existing secrets from GitHub
+        local github_secrets
+        github_secrets=$(get_existing_secrets "$repo" "$environment")
+        
+        # Delete secrets that exist in GitHub but not in .env
+        while IFS= read -r github_secret; do
+            [ -z "$github_secret" ] && continue
+            
+            # Check if this GitHub secret exists in our local .env file
+            local found=false
+            for env_secret in "${env_secrets[@]}"; do
+                if [ "$env_secret" = "$github_secret" ]; then
+                    found=true
+                    break
+                fi
+            done
+            
+            # Delete if not found in local .env file
+            if [ "$found" = false ]; then
+                if delete_secret "$github_secret" "$repo" "$environment"; then
+                    ((DELETED_COUNT++))
+                else
+                    ((FAIL_COUNT++))
+                fi
+            fi
+        done <<< "$github_secrets"
+        
+        if [ $DELETED_COUNT -gt 0 ]; then
+            log_info "Deleted $DELETED_COUNT secrets that were not in .env file"
+        else
+            log_info "No secrets needed to be deleted"
+        fi
+    fi
+
     # Clear sensitive data from memory
-    unset line key value
+    unset line key value env_key github_secret env_secret env_secrets github_secrets
 }
 
 # Print final summary
@@ -273,6 +365,9 @@ print_summary() {
     echo "Successfully added: $SUCCESS_COUNT"
     if [ $SKIPPED_COUNT -gt 0 ]; then
         echo "Skipped (already exist): $SKIPPED_COUNT"
+    fi
+    if [ $DELETED_COUNT -gt 0 ]; then
+        echo "Deleted (not in .env): $DELETED_COUNT"
     fi
     echo "Failed: $FAIL_COUNT"
     
@@ -293,6 +388,10 @@ main() {
                 ;;
             --skip-existing)
                 SKIP_EXISTING=true
+                shift
+                ;;
+            --sync)
+                SYNC_MODE=true
                 shift
                 ;;
             *)

@@ -51,6 +51,7 @@ chmod +x *.sh && ./setup.sh
 - 🔁 **Retry Logic**: Automatically retries failed uploads
 - 🎯 **Environment Support**: Repository and environment-specific secrets
 - ⏭️ **Skip Existing Secrets**: Option to skip secrets that already exist
+- 🔄 **Sync Mode**: Delete GitHub secrets that are not present in .env file
 - 📊 **Progress Tracking**: Detailed progress and summary reporting
 - 🔧 **Cross-Platform**: macOS, Linux, and Windows support
 
@@ -66,6 +67,11 @@ chmod +x *.sh && ./setup.sh
 ./gh-secrets-upload.sh --skip-existing
 ```
 
+### Sync secrets (delete secrets not in .env file)
+```bash
+./gh-secrets-upload.sh --sync
+```
+
 ### Specific .env file
 ```bash
 ./gh-secrets-upload.sh .env.production
@@ -74,6 +80,11 @@ chmod +x *.sh && ./setup.sh
 ### Skip existing with specific file
 ```bash
 ./gh-secrets-upload.sh --skip-existing .env.production
+```
+
+### Sync with specific file
+```bash
+./gh-secrets-upload.sh --sync .env.production
 ```
 
 ### Different repository
@@ -204,6 +215,9 @@ curl -fsSL https://raw.githubusercontent.com/salemaljebaly/EnvSeeder/feat/improv
 
 # Skip existing secrets
 ./gh-secrets-upload.sh --skip-existing
+
+# Sync secrets (delete missing from .env)
+./gh-secrets-upload.sh --sync
 
 # Help
 ./gh-secrets-upload.sh --help
