@@ -51,7 +51,7 @@ chmod +x *.sh && ./setup.sh
 - 🔁 **Retry Logic**: Automatically retries failed uploads
 - 🎯 **Environment Support**: Repository and environment-specific secrets
 - ⏭️ **Skip Existing Secrets**: Option to skip secrets that already exist
-- 🔄 **Sync Mode**: Delete GitHub secrets that are not present in .env file
+- 🔄 **Sync Mode**: Delete GitHub secrets that are not present in .env file (SSH secrets are always preserved)
 - 📊 **Progress Tracking**: Detailed progress and summary reporting
 - 🔧 **Cross-Platform**: macOS, Linux, and Windows support
 

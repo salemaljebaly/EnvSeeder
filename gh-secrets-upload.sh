@@ -399,6 +399,12 @@ process_env_file() {
         # Delete secrets that exist in GitHub but not in .env
         while IFS= read -r github_secret; do
             [ -z "$github_secret" ] && continue
+
+            # Protect SSH-related secrets from deletion during sync
+            if [[ "${github_secret^^}" == *"SSH"* ]]; then
+                log_warn "Skipping $github_secret (contains 'SSH'; protected from sync deletion)"
+                continue
+            fi
             
             # Check if this GitHub secret exists in our local .env file
             local found=false
