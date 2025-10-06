@@ -400,9 +400,9 @@ process_env_file() {
         while IFS= read -r github_secret; do
             [ -z "$github_secret" ] && continue
 
-            # Protect SSH-related secrets from deletion during sync
-            if [[ "${github_secret^^}" == *"SSH"* ]]; then
-                log_warn "Skipping $github_secret (contains 'SSH'; protected from sync deletion)"
+            # Protect SSH- and TOKEN-related secrets from deletion during sync
+            if [[ "${github_secret^^}" == *"SSH"* || "${github_secret^^}" == *"TOKEN"* ]]; then
+                log_warn "Skipping $github_secret (contains 'SSH' or 'TOKEN'; protected from sync deletion)"
                 continue
             fi
             
